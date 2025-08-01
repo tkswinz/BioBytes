@@ -106,8 +106,8 @@ def writeFile(path, binary):
 
 def writeCompressedBinary(input_data: bytes, output_filename: str):
     compressed_data = zlib.compress(input_data)
-    with open(output_filename, 'wb') as f:
-        f.write(compressed_data)
+    #with open(output_filename, 'wb') as f:
+     #   f.write(compressed_data)
     return compressed_data;   
 
 def readAndDecompress(filename: str) -> bytes:
@@ -227,12 +227,6 @@ def binary_to_image(binary_str, output_path):
     with open(output_path, 'wb') as f:
         f.write(byte_data)
 
-
-def image_to_binary(image_path):
-    with open(image_path, 'rb') as f:
-        data = f.read()
-    return ''.join(f'{byte:08b}' for byte in data)
-
 # Example Usage
 if __name__ == "__main__":
     
@@ -282,14 +276,23 @@ def encode_image_to_dna(image_path: str, fasta_output: str, chunk_size: int = 32
         redundancy_factor: Redundancy multiplier for droplets.
     """
     binary = image_to_binary(image_path)
+    
+    #convert binary to bytes
+    #binary_data = bytes(int(binary[i:i+8], 2) for i in range(0, len(binary), 8))
+    # print(binary)
+
     with open("binary.dat", 'w') as f:
         f.write(binary)
     binary_data = readFile("binary.dat")
+    # print(binary_data)
+
     message = writeCompressedBinary(binary_data, "compressed_output.bin")
     chunks = [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
     num_chunks = len(chunks)
+    print(num_chunks)
     num_droplets = int(num_chunks * redundancy_factor * 20)
     droplets, num_chunks = fountain_encode(message, chunk_size, num_droplets)
+    print(num_chunks)
     ecc_droplets = [
         (indices, add_error_correction(droplet, ecc_bytes))
         for indices, droplet in droplets
@@ -341,3 +344,50 @@ def decode_dna_to_image(fasta_file: str, output_image: str, chunk_size: int, num
     except Exception as e:
         print(f"❌ Decoding failed: {e}")
         return False
+    
+
+# --- API Functions ---
+def compressAndEncode(binary_path: str, chunk_size: int = 32, redundancy_factor: float = 1.5) -> None:
+    """
+    Compress and encode a binary file into fountain code droplets.
+    Args:
+        binary_path: Path to the input binary file.
+        chunk_size: Size of each data chunk.
+        redundancy_factor: Redundancy factor for the fountain code.
+    """
+
+    with open(binary_path, 'rb') as f:
+        binary_data = f.read()
+
+    message = writeCompressedBinary(binary_data, "compressed_output.bin")
+    chunks = [message[i:i+chunk_size] for i in range(0, len(message), chunk_size)]
+    num_chunks = len(chunks)
+    num_droplets = int(num_chunks * redundancy_factor * 20)
+    droplets, num_chunks = fountain_encode(message, chunk_size, num_droplets)
+
+    return droplets, num_chunks
+    # ecc_droplets = [
+    #     (indices, add_error_correction(droplet, ecc_bytes))
+    #     for indices, droplet in droplets
+    # ]
+    # dna_sequences = encode_droplets_to_dna(ecc_droplets)
+    # save_dna_to_fasta(dna_sequences, fasta_output)
+    
+
+
+
+# --- API Functions ---
+def addECCInDroplets(droplets: List[Tuple[int, bytes]], ecc_bytes: int) -> List[Tuple[int, bytes]]:
+    """
+    Add error correction code (ECC) to each droplet.
+    Args:
+        droplets: List of droplets to encode.
+        ecc_bytes: Number of error correction bytes to add.
+    Returns:
+        List of droplets with ECC added.
+    """
+    ecc_droplets = [
+        (indices, add_error_correction(droplet, ecc_bytes))
+        for indices, droplet in droplets
+    ]
+    return ecc_droplets
