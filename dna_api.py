@@ -7,12 +7,15 @@ import json
 import math
 import base64
 from flasgger import Swagger
+from flask_cors import CORS
 
 import logging
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 
 app = Flask(__name__)
+
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 template = {
     "swagger": "2.0",
