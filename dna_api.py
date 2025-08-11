@@ -1,13 +1,22 @@
 from flask import Flask, request, send_file, jsonify
 import os
 from werkzeug.utils import secure_filename
-from fountaincodev2 import addECCInDroplets, encode_image_to_dna, decode_dna_to_image, image_to_binary, writeCompressedBinary, fountain_encode, compressAndEncode, add_error_correction, encode_droplets_to_dna, save_dna_to_fasta
+from compression_utils import compress_binary_data
 import tempfile
 import json
 import math
 import base64
 from flasgger import Swagger
 from flask_cors import CORS
+
+# Import fountain code functions conditionally to handle PIL dependency
+try:
+    from fountaincodev2 import addECCInDroplets, encode_image_to_dna, decode_dna_to_image, image_to_binary, writeCompressedBinary, fountain_encode, compressAndEncode, add_error_correction, encode_droplets_to_dna, save_dna_to_fasta
+    FOUNTAIN_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: Fountain code functions not available due to missing dependencies: {e}")
+    print("Compression API will still work, but other APIs may not function.")
+    FOUNTAIN_AVAILABLE = False
 
 import logging
 logger = logging.getLogger()
@@ -379,6 +388,133 @@ def encode_to_fasta_api():
 
         return send_file(fasta_path, as_attachment=True, download_name='dna_encoded.fasta')
 
+@app.route('/compress', methods=['POST'])
+def compress_binary():
+    """
+    Compress a binary file using zlib compression.
+    ---
+    tags:
+      - Encoding APIs
+    parameters:
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: The binary file to compress.
+    responses:
+      200:
+        description: The compressed binary file.
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      400:
+        description: Error message if no file provided.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+    """
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    filename = secure_filename(file.filename)
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # Read the file data
+        file_data = file.read()
+        
+        # Compress the data using our compression utility
+        compressed_data = compress_binary_data(file_data)
+        
+        # Save compressed data to temporary file
+        base_name = os.path.splitext(filename)[0]
+        compressed_filename = f"{base_name}.compressed"
+        compressed_path = os.path.join(tmpdir, compressed_filename)
+        
+        with open(compressed_path, 'wb') as f:
+            f.write(compressed_data)
+        
+        return send_file(compressed_path, as_attachment=True, download_name=compressed_filename)
+
+@app.route('/decompress', methods=['POST'])
+def decompress_binary():
+    """
+    Decompress a binary file that was compressed with zlib.
+    ---
+    tags:
+      - Encoding APIs
+    parameters:
+      - name: file
+        in: formData
+        type: file
+        required: true
+        description: The compressed binary file to decompress.
+      - name: original_extension
+        in: formData
+        type: string
+        required: false
+        description: The original file extension (e.g., 'txt', 'jpg'). If not provided, uses 'bin'.
+    responses:
+      200:
+        description: The decompressed binary file.
+        content:
+          application/octet-stream:
+            schema:
+              type: string
+              format: binary
+      400:
+        description: Error message if no file provided or decompression fails.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                error:
+                  type: string
+    """
+    if 'file' not in request.files:
+        return jsonify({'error': 'No file provided'}), 400
+    
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'No file selected'}), 400
+    
+    filename = secure_filename(file.filename)
+    original_extension = request.form.get('original_extension', 'bin')
+    
+    with tempfile.TemporaryDirectory() as tmpdir:
+        try:
+            # Read the compressed file data
+            compressed_data = file.read()
+            
+            # Decompress the data using our compression utility
+            from compression_utils import decompress_binary_data
+            decompressed_data = decompress_binary_data(compressed_data)
+            
+            # Save decompressed data to temporary file
+            base_name = os.path.splitext(filename)[0]
+            if base_name.endswith('.compressed'):
+                base_name = base_name[:-11]  # Remove '.compressed' suffix
+            
+            decompressed_filename = f"{base_name}.{original_extension}"
+            decompressed_path = os.path.join(tmpdir, decompressed_filename)
+            
+            with open(decompressed_path, 'wb') as f:
+                f.write(decompressed_data)
+            
+            return send_file(decompressed_path, as_attachment=True, download_name=decompressed_filename)
+        
+        except Exception as e:
+            return jsonify({'error': f'Decompression failed: {str(e)}'}), 400
 
 
 if __name__ == '__main__':
