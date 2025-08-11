@@ -1,0 +1,13 @@
+# Python cache files
+__pycache__/
+*.py[cod]
+*.class
+
+# Compressed test files  
+*.compressed
+*.bin
+
+# Temporary files
+*.tmp
+temp/
+tmp/
