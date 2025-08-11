@@ -10,6 +10,7 @@ BIN_TO_DNA = {'00': 'A', '01': 'C', '10': 'G', '11': 'T'}
 DNA_TO_BIN = {v: k for k, v in BIN_TO_DNA.items()}
 
 def binary_to_image(binary_str, output_path):
+    print("No valid droplets found.")
     byte_data = bytearray(int(binary_str[i:i+8], 2) for i in range(0, len(binary_str), 8))
     with open(output_path, 'wb') as f:
         f.write(byte_data)
